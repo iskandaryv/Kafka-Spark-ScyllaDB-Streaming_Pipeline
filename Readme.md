@@ -1,8 +1,5 @@
 # Data Streaming Pipeline with Airflow, Kafka, Spark, and ScyllaDB
 
-![GitHub](https://img.shields.io/github/license/iskandaryv/streaming-pipeline)
-![Docker Pulls](https://img.shields.io/docker/pulls/iskandaryv/streaming-pipeline)
-
 A complete end-to-end data streaming pipeline built with Apache Airflow, Apache Kafka, Apache Spark, and ScyllaDB. This project demonstrates how to build a scalable and distributed data processing system using containerized services.
 
 ## 🚀 Architecture
@@ -14,7 +11,7 @@ The pipeline follows this workflow:
 4. Processed data is stored in ScyllaDB
 5. The entire workflow is containerized using Docker
 
-![Architecture Diagram](https://your-repo-url/architecture-diagram.png)
+![Architecture Diagram](https://github.com/iskandaryv/Kafka-Spark-ScyllaDB-Streaming_Pipeline/blob/main/API-Kafka-Spark%20System%20Architecture.png)
 
 ## ✨ Features
 
@@ -36,8 +33,8 @@ The pipeline follows this workflow:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/iskandaryv/streaming-pipeline.git
-cd streaming-pipeline
+git clone https://github.com/iskandaryv/Kafka-Spark-ScyllaDB-Streaming_Pipeline.git
+cd Kafka-Spark-ScyllaDB-Streaming_Pipeline
 ```
 
 2. Start all services using Docker Compose:
@@ -97,18 +94,3 @@ docker-compose exec spark-master bash -c "cd /opt/spark-jobs && python test_kafk
 ```bash
 docker-compose exec spark-master bash -c "cd /opt/spark-jobs && python test_scylla_connection.py"
 ```
-
-## �� Project Structure
-├── dags/ # Airflow DAG definitions
-│ └── random_user_dag.py # DAG for random user data processing
-├── spark-jobs/ # Spark application code
-│ ├── kafka_to_cassandra.py # Spark streaming job
-│ ├── test_kafka_producer.py# Test script for Kafka
-│ └── test_scylla_connection.py # Test script for ScyllaDB
-├── scripts/ # Helper scripts
-├── docker-compose.yml # Docker Compose configuration
-├── requirements.txt # Python dependencies for Airflow
-├── requirements_spark.txt # Python dependencies for Spark
-├── spark-defaults.conf # Spark configuration
-└── README.md # Project documentation
-
