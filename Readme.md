@@ -33,8 +33,8 @@ The pipeline follows this workflow:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/iskandaryv/streaming-pipeline.git
-cd streaming-pipeline
+git clone https://github.com/iskandaryv/Kafka-Spark-ScyllaDB-Streaming_Pipeline.git
+cd Kafka-Spark-ScyllaDB-Streaming_Pipeline
 ```
 
 2. Start all services using Docker Compose:
