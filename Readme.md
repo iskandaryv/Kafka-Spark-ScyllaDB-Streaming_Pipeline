@@ -94,18 +94,3 @@ docker-compose exec spark-master bash -c "cd /opt/spark-jobs && python test_kafk
 ```bash
 docker-compose exec spark-master bash -c "cd /opt/spark-jobs && python test_scylla_connection.py"
 ```
-
-## �� Project Structure
-├── dags/ # Airflow DAG definitions
-│ └── random_user_dag.py # DAG for random user data processing
-├── spark-jobs/ # Spark application code
-│ ├── kafka_to_cassandra.py # Spark streaming job
-│ ├── test_kafka_producer.py# Test script for Kafka
-│ └── test_scylla_connection.py # Test script for ScyllaDB
-├── scripts/ # Helper scripts
-├── docker-compose.yml # Docker Compose configuration
-├── requirements.txt # Python dependencies for Airflow
-├── requirements_spark.txt # Python dependencies for Spark
-├── spark-defaults.conf # Spark configuration
-└── README.md # Project documentation
-
