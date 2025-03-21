@@ -1,0 +1,17 @@
+kafka-python==2.0.2
+confluent-kafka==2.2.0
+
+# Spark
+pyspark==3.3.2
+findspark==2.0.1
+
+# ScyllaDB/Cassandra
+scylla-driver==3.25.11
+cassandra-driver==3.26.0
+
+# API and data processing
+requests==2.31.0
+
+
+# JSON handling
+jsonschema==4.19.0

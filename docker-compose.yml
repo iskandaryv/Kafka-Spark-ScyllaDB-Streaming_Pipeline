@@ -1,0 +1,372 @@
+version: '3.8'
+
+services:
+  # ZooKeeper service
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ['CMD', 'bash', '-c', "echo 'ruok' | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - streaming-network
+
+  # Kafka service
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 60000
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 60000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - streaming-network
+
+  # Schema Registry
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.3.2
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - streaming-network
+
+  # Control Center
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.3.2
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: kafka:9092
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      CONFLUENT_METRICS_ENABLE: 'false'
+      PORT: 9021
+    volumes:
+      - control-center-data:/var/lib/confluent-control-center
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9021/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - streaming-network
+
+  # PostgreSQL for Airflow metadata
+  postgres:
+    image: postgres:14
+    hostname: postgres
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - streaming-network
+
+  # Airflow components
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    hostname: airflow-webserver
+    container_name: airflow-webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=30
+      - AIRFLOW__CORE__FERNET_KEY=
+      - AIRFLOW__CORE__ENABLE_XCOM_PICKLING=true
+      - AIRFLOW__CORE__STORE_SERIALIZED_DAGS=true
+      - AIRFLOW__CORE__STORE_DAG_CODE=true
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts/entrypoint.sh:/opt/airflow/entrypoint.sh
+      - ./requirements.txt:/opt/airflow/requirements.txt
+    entrypoint: ['/opt/airflow/entrypoint.sh']
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - streaming-network
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    hostname: airflow-scheduler
+    container_name: airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__FERNET_KEY=
+      - AIRFLOW__CORE__ENABLE_XCOM_PICKLING=true
+      - AIRFLOW__CORE__STORE_SERIALIZED_DAGS=true
+      - AIRFLOW__CORE__STORE_DAG_CODE=true
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts/entrypoint.sh:/opt/airflow/entrypoint.sh
+      - ./requirements.txt:/opt/airflow/requirements.txt
+    entrypoint: ['/opt/airflow/entrypoint.sh']
+    command: scheduler
+    networks:
+      - streaming-network
+
+  # Spark components with Bitnami image
+  spark-master:
+    image: docker.io/bitnami/spark:3.3.2
+    hostname: spark-master
+    container_name: spark-master
+    ports:
+      - "8090:8080"  # Web UI
+      - "7077:7077"  # Spark master port
+    environment:
+      - SPARK_MODE=master
+      # Using Bitnami environment variables
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      # Set environment variables for pip to use Tsinghua mirror
+      - PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+      - PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+    volumes:
+      - ./spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./requirements_spark.txt:/opt/bitnami/spark/requirements_spark.txt
+    command: |
+      bash -c "
+        # Install required Python packages from requirements_spark.txt
+        pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+        pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r /opt/bitnami/spark/requirements_spark.txt
+        
+        # Download additional JARs needed for ScyllaDB and Kafka
+        wget -q https://repo1.maven.org/maven2/com/datastax/spark/spark-cassandra-connector_2.12/3.3.0/spark-cassandra-connector_2.12-3.3.0.jar -P /opt/bitnami/spark/jars/
+        wget -q https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.3.2/spark-sql-kafka-0-10_2.12-3.3.2.jar -P /opt/bitnami/spark/jars/
+        
+        # Start Spark master service (default command for the image in master mode)
+        /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/scripts/spark/run.sh
+      "
+    networks:
+      - streaming-network
+
+  spark-worker:
+    image: docker.io/bitnami/spark:3.3.2
+    hostname: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      # Set environment variables for pip to use Tsinghua mirror
+      - PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+      - PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+    volumes:
+      - ./spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./requirements_spark.txt:/opt/bitnami/spark/requirements_spark.txt
+    command: |
+      bash -c "
+        # Install required Python packages from requirements_spark.txt
+        pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+        pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r /opt/bitnami/spark/requirements_spark.txt
+        
+        # Start Spark worker service (default command for the image in worker mode)
+        /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/scripts/spark/run.sh
+      "
+    ports:
+      - "8091:8081"  # Worker web UI
+    networks:
+      - streaming-network
+
+  # ScyllaDB service (replacing Cassandra)
+  # ScyllaDB service (renamed to avoid conflict)
+  scylla:
+    image: scylladb/scylla:latest
+    hostname: cassandra  # Keep hostname for compatibility with existing code
+    container_name: scylla  # Change container name to avoid conflict
+    ports:
+      - "9042:9042"  # CQL port
+      - "9160:9160"  # Thrift port
+      - "17000:7000"  # Inter-node communication
+      - "17001:7001"  # SSL inter-node
+      - "10000:10000"  # REST API
+    environment:
+      - SCYLLA_DEVELOPER_MODE=1  # Development mode for easier setup
+      # Reduce memory usage for development
+      - SCYLLA_MEMORY=512M
+      - SCYLLA_SHARD=1
+      # Keep auth credentials consistent
+      - SCYLLA_USER=cassandra
+      - SCYLLA_PASSWORD=cassandra
+    volumes:
+      - scylla-data:/var/lib/scylla
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -u cassandra -p cassandra -e 'describe keyspaces;'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - streaming-network
+
+  # Spark submit service using Bitnami Spark
+  spark-submit:
+    image: bitnami/spark:3.3.2
+    depends_on:
+      - spark-master
+      - kafka
+      - scylla
+    volumes:
+      - ./spark-jobs:/opt/spark-jobs
+      - ./spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+    command: |
+      bash -c '
+      echo "Waiting for services to be ready..."
+      sleep 30
+      
+      echo "Installing Python Cassandra driver..."
+      pip install --no-cache-dir cassandra-driver
+      
+      echo "Submitting Spark job..."
+      /opt/bitnami/spark/bin/spark-submit \
+        --master spark://spark-master:7077 \
+        --packages com.datastax.spark:spark-cassandra-connector_2.12:3.3.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.2 \
+        --conf spark.cassandra.connection.host=scylla \
+        --conf spark.cassandra.connection.port=9042 \
+        --conf spark.cassandra.auth.username=cassandra \
+        --conf spark.cassandra.auth.password=cassandra \
+        --conf spark.cassandra.connection.keepAliveMS=60000 \
+        /opt/spark-jobs/kafka_to_cassandra.py
+      '
+    networks:
+      - streaming-network
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.3.2
+    depends_on:
+      - kafka
+    user: root
+    environment:
+      - LOG_DIR=/tmp/kafka-logs
+      - KAFKA_OPTS=-Dlog4j.configuration=file:/etc/kafka/tools-log4j.properties
+    volumes:
+      - ./kafka-logs:/tmp/kafka-logs
+    command: |
+      bash -c '
+      echo "Waiting for Kafka to be ready..."
+      cub kafka-ready -b kafka:9092 1 30
+      
+      echo "Creating Kafka topics..."
+      kafka-topics --create --if-not-exists \
+        --bootstrap-server kafka:9092 \
+        --topic random_users \
+        --partitions 1 \
+        --replication-factor 1 \
+        --config retention.ms=604800000
+      
+      echo "Verifying topic creation..."
+      kafka-topics --list --bootstrap-server kafka:9092
+      '
+    networks:
+      - streaming-network
+
+volumes:
+  zookeeper-data:
+  zookeeper-log:
+  kafka-data:
+  control-center-data:
+  postgres-data:
+  scylla-data:
+
+networks:
+  streaming-network:
+    driver: bridge

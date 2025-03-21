@@ -1,0 +1,25 @@
+# Airflow providers for integrations
+apache-airflow-providers-apache-kafka==1.2.0
+apache-airflow-providers-apache-spark==4.1.2
+apache-airflow-providers-http==4.5.0
+
+# Kafka
+kafka-python==2.0.2
+confluent-kafka==2.2.0
+
+# ScyllaDB/Cassandra
+
+# API and data processing
+requests==2.31.0
+pandas==2.0.3
+
+
+# JSON handling
+jsonschema==4.19.0
+
+# Utilities
+python-dateutil==2.8.2
+tenacity==8.2.3
+
+# Logging
+loguru==0.7.0
