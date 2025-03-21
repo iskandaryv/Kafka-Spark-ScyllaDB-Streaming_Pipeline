@@ -132,9 +132,7 @@ services:
 
   # Airflow components
   airflow-webserver:
-    build:
-      context: .
-      dockerfile: Dockerfile.airflow
+    image: apache/airflow:2.6.3
     hostname: airflow-webserver
     container_name: airflow-webserver
     depends_on:
@@ -171,9 +169,7 @@ services:
       - streaming-network
 
   airflow-scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile.airflow
+    image: apache/airflow:2.6.3
     hostname: airflow-scheduler
     container_name: airflow-scheduler
     environment:
