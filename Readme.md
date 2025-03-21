@@ -1,8 +1,5 @@
 # Data Streaming Pipeline with Airflow, Kafka, Spark, and ScyllaDB
 
-![GitHub](https://img.shields.io/github/license/iskandaryv/streaming-pipeline)
-![Docker Pulls](https://img.shields.io/docker/pulls/iskandaryv/streaming-pipeline)
-
 A complete end-to-end data streaming pipeline built with Apache Airflow, Apache Kafka, Apache Spark, and ScyllaDB. This project demonstrates how to build a scalable and distributed data processing system using containerized services.
 
 ## 🚀 Architecture
@@ -14,7 +11,7 @@ The pipeline follows this workflow:
 4. Processed data is stored in ScyllaDB
 5. The entire workflow is containerized using Docker
 
-![Architecture Diagram](https://your-repo-url/architecture-diagram.png)
+![Architecture Diagram](https://github.com/iskandaryv/Kafka-Spark-ScyllaDB-Streaming_Pipeline/blob/main/API-Kafka-Spark%20System%20Architecture.png)
 
 ## ✨ Features
 
